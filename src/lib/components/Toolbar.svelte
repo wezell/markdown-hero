@@ -8,7 +8,6 @@
   import { copyAsRichText, copyAsMarkdown } from "../utils/clipboard";
   import { t, translate } from "$lib/i18n";
   import ReaderControls from "./ReaderControls.svelte";
-  import brandLogo from "$lib/assets/mdhero-icon.png";
 
   let {
     onPaste = () => {},
@@ -120,8 +119,6 @@
 
 <header class="toolbar">
   <div class="toolbar-left">
-    <img src={brandLogo} alt="MDHero" width="26" height="26" class="toolbar-logo" />
-    <span class="toolbar-wordmark">MDHero</span>
     <div class="btn-group">
       <button onclick={onOpen} class="btn btn-primary" title={$t('toolbar.openTitle', { mod: MOD })}>
         {$t('toolbar.open')}
@@ -140,7 +137,7 @@
   </div>
 
   <!-- View / Split / Edit segmented control, centered in the toolbar. Split &
-       Edit need an editable local file; when there isn't one they disable with
+       Edit need an editable document; when there isn't one they disable with
        an explaining tip. -->
   <div class="toolbar-center">
     <div
@@ -379,25 +376,6 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
-  }
-
-  .toolbar-logo {
-    flex-shrink: 0;
-    border-radius: 6px;
-    display: block;
-  }
-
-  .toolbar-wordmark {
-    flex-shrink: 0;
-    font-size: 17px;
-    font-weight: 600;
-    color: #1c1c1e;
-    letter-spacing: -0.01em;
-    margin-left: -3px;
-  }
-
-  :global(html.dark) .toolbar-wordmark {
-    color: #e5e5e7;
   }
 
   .toolbar-right {

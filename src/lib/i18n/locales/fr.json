@@ -184,6 +184,10 @@
   },
   "search": {
     "placeholder": "Rechercher dans le document…",
+    "replacePlaceholder": "Remplacer par…",
+    "replace": "Remplacer",
+    "replaceAll": "Tout remplacer",
+    "replaceEditingOnly": "Passez en mode Édition ou Fractionné pour remplacer du texte.",
     "prevTitle": "Précédent (Maj+Entrée)",
     "nextTitle": "Suivant (Entrée)",
     "closeTitle": "Fermer (Échap)"
@@ -323,6 +327,8 @@
     "copy": "Copier",
     "paste": "Coller",
     "selectAll": "Tout sélectionner",
+    "undo": "Annuler",
+    "redo": "Rétablir",
     "fullscreen": "Passer en plein écran",
     "minimize": "Réduire",
     "maximize": "Agrandir"

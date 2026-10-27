@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findMatches, cycleIndex, buildHighlightHtml } from "../../src/lib/utils/text-search";
+import { findMatches, cycleIndex, buildHighlightHtml, replaceMatches } from "../../src/lib/utils/text-search";
 
 describe("findMatches", () => {
   it("returns no matches for an empty query", () => {
@@ -51,8 +51,74 @@ describe("findMatches", () => {
     ]);
   });
 
+  it("keeps offsets in the original text when Unicode case folding changes length", () => {
+    expect(findMatches("İ foo FOO", "foo")).toEqual([
+      { start: 2, end: 5 },
+      { start: 6, end: 9 },
+    ]);
+    expect(findMatches("İ foo", "İ")).toEqual([{ start: 0, end: 1 }]);
+  });
+
   it("returns an empty array when there is no match", () => {
     expect(findMatches("hello", "zzz")).toEqual([]);
+  });
+});
+
+describe("replaceMatches", () => {
+  it("replaces only the active match and advances to the next one", () => {
+    expect(replaceMatches("foo foo foo", "foo", "bar", 1, false)).toEqual({
+      text: "foo bar foo", activeIndex: 1,
+    });
+  });
+
+  it("wraps after replacing the last match", () => {
+    expect(replaceMatches("foo foo", "foo", "bar", 1, false)).toEqual({
+      text: "foo bar", activeIndex: 0,
+    });
+  });
+
+  it("replaces all non-overlapping matches case-insensitively", () => {
+    expect(replaceMatches("Foo FOO foo", "foo", "bar", 1, true)).toEqual({
+      text: "bar bar bar", activeIndex: 0,
+    });
+    expect(replaceMatches("aaaaa", "aa", "x", 0, true).text).toBe("xxa");
+  });
+
+  it("treats both the query and replacement as literal text", () => {
+    expect(replaceMatches("a.b axb a.b", "a.b", "$&$1", 0, true).text).toBe("$&$1 axb $&$1");
+    const special = ".*+?^$()|[]\\";
+    expect(replaceMatches(special, special, "literal", 0, true).text).toBe("literal");
+  });
+
+  it("allows an empty replacement to delete matches", () => {
+    expect(replaceMatches("foo foo", "foo", "", 0, false)).toEqual({
+      text: " foo", activeIndex: 0,
+    });
+    expect(replaceMatches("foo foo", "foo", "", 0, true).text).toBe(" ");
+  });
+
+  it("does not recursively replace newly inserted matches", () => {
+    expect(replaceMatches("foo foo", "foo", "foofoo", 0, true).text).toBe("foofoo foofoo");
+    expect(replaceMatches("foo foo", "foo", "foofoo", 0, false)).toEqual({
+      text: "foofoo foo", activeIndex: 2,
+    });
+  });
+
+  it("leaves text alone for an empty query or no matches", () => {
+    for (const query of ["", "absent"]) {
+      expect(replaceMatches("unchanged", query, "x", 0, true)).toEqual({
+        text: "unchanged", activeIndex: 0,
+      });
+    }
+  });
+
+  it("preserves Unicode text and offsets, including emoji", () => {
+    expect(replaceMatches("İ 😀 foo FOO", "foo", "ok", 0, true).text).toBe("İ 😀 ok ok");
+    expect(replaceMatches("😀İ😀", "İ", "x", 0, true).text).toBe("😀x😀");
+  });
+
+  it("supports matches and replacements spanning lines", () => {
+    expect(replaceMatches("a\nb a\nb", "a\nb", "c\nd", 0, true).text).toBe("c\nd c\nd");
   });
 });
 

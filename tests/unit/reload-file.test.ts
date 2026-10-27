@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 const invoke = vi.fn();
 const documentSet = vi.fn();
@@ -20,13 +20,14 @@ vi.mock("../../src/lib/stores/tabs", () => ({
   tabStore: { updateTabContent, addTab, rebindPath, setEditing: vi.fn(), getActiveTab: () => activeTab },
 }));
 
-const { reloadFile, openFile, openFileDialog, saveAsNewDocument, watchFile, unwatchFile } = await import("../../src/lib/tauri/files");
+const { reloadFile, openFile, openFileDialog, saveAsNewDocument, watchFile, unwatchFile, getBaseDir } = await import("../../src/lib/tauri/files");
 
 const calls = (cmd: string) => invoke.mock.calls.filter((c) => c[0] === cmd).map((c) => c[1]);
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(open).mockReset();
+  vi.mocked(save).mockReset().mockResolvedValue("/docs/chosen.md");
   activeTab = null;
   invoke.mockImplementation(async (cmd: string, args: any) => {
     if (cmd === "resolve_path") return args.path;
@@ -90,6 +91,32 @@ describe("reloadFile routing", () => {
     await reloadFile("/docs/a.md");
     expect(updateTabContent).toHaveBeenCalledTimes(1);
     expect(documentSet).not.toHaveBeenCalled();
+  });
+});
+
+describe("first save of pasted content", () => {
+  it("writes the content and rebinds the tab only after choosing a location", async () => {
+    await saveAsNewDocument("paste-tab", "# pasted");
+    expect(calls("write_markdown_file")).toEqual([{ path: "/docs/chosen.md", content: "# pasted" }]);
+    expect(rebindPath).toHaveBeenCalledWith("paste-tab", "/docs/chosen.md", "chosen.md");
+  });
+
+  it("leaves the paste untouched when Save As is cancelled", async () => {
+    vi.mocked(save).mockResolvedValue(null);
+    expect(await saveAsNewDocument("paste-tab", "# pasted")).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+    expect(rebindPath).not.toHaveBeenCalled();
+  });
+
+  it("keeps the paste in memory if writing fails", async () => {
+    invoke.mockRejectedValue(new Error("write failed"));
+    await expect(saveAsNewDocument("paste-tab", "# pasted")).rejects.toThrow("write failed");
+    expect(rebindPath).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve preview images against a fake filesystem directory", () => {
+    expect(getBaseDir("paste://1")).toBe("");
+    expect(getBaseDir("/docs/saved.md")).toBe("/docs");
   });
 });
 

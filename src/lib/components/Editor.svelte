@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { searchQuery, searchActiveIndex, searchTotal } from "$lib/stores/search";
-  import { findMatches, buildHighlightHtml } from "$lib/utils/text-search";
+  import { findMatches, buildHighlightHtml, replaceMatches } from "$lib/utils/text-search";
   import { gutterHtml as buildGutterHtml, gutterWidth as buildGutterWidth, lineCount as countLines } from "$lib/utils/line-gutter";
   import { highlightMarkdownLines } from "$lib/utils/markdown-highlight";
   import { patchLines } from "$lib/utils/line-patch";
@@ -35,11 +35,26 @@
   // svelte-ignore state_referenced_locally
   let localValue = $state(value);
 
+  // Undo/redo history. The webview's native textarea undo collapses a whole
+  // editing session into one step (WKWebView in particular), so the editor
+  // keeps its own snapshots: consecutive typing is grouped for half a second,
+  // while whitespace, paste/cut and line breaks start a new step.
+  const HISTORY_LIMIT = 200;
+  const TYPING_GROUP_MS = 500;
+  let undoStack: string[] = [];
+  let redoStack: string[] = [];
+  let committed = localValue;
+  let lastEditAt = 0;
+
   // Keep local in sync if parent value changes from a different source
   // (e.g. external file reload while not editing — though unlikely while editor is mounted)
   $effect(() => {
     if (value !== localValue && document.activeElement !== textareaEl) {
       localValue = value;
+      committed = value;
+      undoStack = [];
+      redoStack = [];
+      lastEditAt = 0;
     }
   });
 
@@ -74,6 +89,9 @@
   // Enter / prev / next navigation work while editing.
   $effect(() => {
     searchTotal.set($searchQuery ? matches.length : 0);
+    if ($searchActiveIndex >= matches.length) {
+      searchActiveIndex.set(Math.max(0, matches.length - 1));
+    }
   });
 
   // --- Syntax highlighting (#73) ----------------------------------------------
@@ -142,6 +160,19 @@
         textareaEl?.focus();
       }
     });
+    // Native menu accelerators are forwarded here by +page.svelte.
+    const onUndo = () => {
+      if (document.activeElement === textareaEl) undo();
+    };
+    const onRedo = () => {
+      if (document.activeElement === textareaEl) redo();
+    };
+    window.addEventListener("mdhero:undo", onUndo);
+    window.addEventListener("mdhero:redo", onRedo);
+    return () => {
+      window.removeEventListener("mdhero:undo", onUndo);
+      window.removeEventListener("mdhero:redo", onRedo);
+    };
   });
 
   onDestroy(() => {
@@ -162,13 +193,90 @@
     activeLine = localValue.slice(0, textareaEl.selectionStart).split("\n").length - 1;
   }
 
-  function handleInput() {
+  function applyHistoryValue(next: string) {
+    const caret = Math.min(textareaEl?.selectionStart ?? next.length, next.length);
+    localValue = next;
+    committed = next;
+    onChange(next);
+    lastEditAt = 0;
+    tick().then(() => {
+      const el = textareaEl;
+      if (!el) return;
+      el.value = next;
+      el.selectionStart = el.selectionEnd = caret;
+      updateActiveLine();
+      syncBackdropScroll();
+    });
+  }
+
+  export function replace(replacement: string, all: boolean) {
+    const result = replaceMatches(localValue, $searchQuery, replacement, $searchActiveIndex, all);
+    if (result.text !== localValue) {
+      undoStack.push(localValue);
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+      redoStack = [];
+      applyHistoryValue(result.text);
+    }
+    searchActiveIndex.set(result.activeIndex);
+  }
+
+  function undo() {
+    const prev = undoStack.pop();
+    if (prev === undefined) return;
+    redoStack.push(localValue);
+    applyHistoryValue(prev);
+  }
+
+  function redo() {
+    const next = redoStack.pop();
+    if (next === undefined) return;
+    undoStack.push(localValue);
+    applyHistoryValue(next);
+  }
+
+  function handleInput(e: Event) {
+    const input = e as InputEvent;
+    const now = Date.now();
+    const isTyping =
+      input.inputType === "insertText" ||
+      input.inputType === "insertCompositionText" ||
+      input.inputType === "deleteContentBackward" ||
+      input.inputType === "deleteContentForward";
+    const startsNewWord =
+      input.inputType === "insertText" && /\s/.test(input.data ?? "");
+    if (
+      undoStack.length === 0 ||
+      !isTyping ||
+      startsNewWord ||
+      now - lastEditAt > TYPING_GROUP_MS
+    ) {
+      undoStack.push(committed);
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+    }
+    redoStack = [];
+    lastEditAt = now;
+    committed = localValue;
     onChange(localValue);
     updateActiveLine();
     syncBackdropScroll();
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    // The native menu owns Cmd/Ctrl+Z in the app; only a plain browser needs
+    // the key handler (and must not let the coarse native undo run instead).
+    const mod = e.metaKey || e.ctrlKey;
+    if (!("__TAURI_INTERNALS__" in window) && mod && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+      return;
+    }
+    if (!("__TAURI_INTERNALS__" in window) && e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      redo();
+      return;
+    }
+
     // Tab inserts 2 spaces instead of moving focus
     if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
@@ -177,7 +285,13 @@
       const end = t.selectionEnd;
       const indent = "  ";
       const newValue = t.value.slice(0, start) + indent + t.value.slice(end);
+      // Tab is a programmatic edit with no input event; make it its own undo step.
+      undoStack.push(t.value);
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+      redoStack = [];
+      lastEditAt = 0;
       localValue = newValue;
+      committed = newValue;
       onChange(newValue);
       // Restore cursor after the inserted indent
       tick().then(() => {
@@ -222,6 +336,7 @@
     <textarea
       bind:this={textareaEl}
       bind:value={localValue}
+      data-mdhero-editor
       oninput={handleInput}
       onkeydown={handleKeydown}
       onkeyup={updateActiveLine}
@@ -273,8 +388,10 @@
 
   .editor-stack {
     position: relative;
-    flex: 1;
+    /* No flex-grow: once max-width caps the column, the auto margins (not
+       justify-content) centre it, matching the rendered document. */
     width: 100%;
+    margin: 0 auto;
     height: 100%;
   }
 

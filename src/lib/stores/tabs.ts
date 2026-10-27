@@ -127,7 +127,7 @@ function createTabStore() {
       scrollTop: 0,
       isEditing: false,
       editContent: content,
-      dirty: false,
+      dirty: filePath.startsWith("paste://"),
       lastSavedAt: 0,
       diskChanged: false,
     };
@@ -239,7 +239,8 @@ function createTabStore() {
     tabs.update((ts) =>
       ts.map((t) => {
         if (t.id !== id) return t;
-        return { ...t, editContent: newContent, dirty: newContent !== t.content };
+        // Pasted content is unsaved even if edits return to the original text.
+        return { ...t, editContent: newContent, dirty: t.filePath.startsWith("paste://") || newContent !== t.content };
       })
     );
   }
@@ -259,7 +260,7 @@ function createTabStore() {
   }
 
   // Re-point a tab at a real filesystem path + name. Used when an unsaved
-  // `new://` document gets a location on its first save (#63).
+  // new or pasted document gets a location on its first save.
   function rebindPath(id: string, filePath: string, fileName: string) {
     tabs.update((ts) =>
       ts.map((t) => (t.id === id ? { ...t, filePath, fileName } : t))

@@ -116,6 +116,24 @@ pub fn create_menu_with_labels<R: Runtime>(
         tr(labels, "menu.edit", "Edit"),
         true,
         &[
+            // Custom items, not PredefinedMenuItem: the webview's native undo
+            // collapses a whole textarea session into one step. These route
+            // through lib.rs to the editor's own finer-grained history.
+            &MenuItem::with_id(
+                app,
+                "undo",
+                tr(labels, "menu.undo", "Undo"),
+                true,
+                Some("CmdOrCtrl+Z"),
+            )?,
+            &MenuItem::with_id(
+                app,
+                "redo",
+                tr(labels, "menu.redo", "Redo"),
+                true,
+                Some("CmdOrCtrl+Shift+Z"),
+            )?,
+            &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::cut(app, predefined_label(labels, "menu.cut"))?,
             &PredefinedMenuItem::copy(app, predefined_label(labels, "menu.copy"))?,
             &PredefinedMenuItem::paste(app, predefined_label(labels, "menu.paste"))?,

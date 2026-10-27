@@ -17,25 +17,40 @@ export interface Match {
  *
  * The match is literal — `query` is never treated as a regular expression — so
  * special characters such as `.` `*` `(` are matched verbatim. Returns an empty
- * array for an empty/whitespace-free-but-empty query.
+ * array for an empty query.
  */
 export function findMatches(text: string, query: string): Match[] {
   const matches: Match[] = [];
   if (!text || !query) return matches;
 
-  const haystack = text.toLowerCase();
-  const needle = query.toLowerCase();
-  const len = needle.length;
-  if (len === 0) return matches;
-
-  let from = 0;
-  while (from <= haystack.length - len) {
-    const idx = haystack.indexOf(needle, from);
-    if (idx === -1) break;
-    matches.push({ start: idx, end: idx + len });
-    from = idx + len; // non-overlapping
+  // Lowercasing can change string length (e.g. İ), corrupting replacement offsets.
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu");
+  for (const match of text.matchAll(pattern)) {
+    matches.push({ start: match.index!, end: match.index! + match[0].length });
   }
   return matches;
+}
+
+/** Replace the active match or all matches literally, then advance past the replacement. */
+export function replaceMatches(
+  text: string, query: string, replacement: string, activeIndex: number, all: boolean
+): { text: string; activeIndex: number } {
+  const matches = findMatches(text, query);
+  const active = matches[activeIndex] ?? matches[0];
+  if (!active) return { text, activeIndex: 0 };
+
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const match of all ? matches : [active]) {
+    parts.push(text.slice(cursor, match.start), replacement);
+    cursor = match.end;
+  }
+  parts.push(text.slice(cursor));
+  const next = parts.join("");
+  const nextIndex = all ? 0 : findMatches(next, query).findIndex(
+    (match) => match.start >= active.start + replacement.length
+  );
+  return { text: next, activeIndex: Math.max(0, nextIndex) };
 }
 
 /**

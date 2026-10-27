@@ -169,6 +169,8 @@ const MENU_KEYS = [
   "menu.copy",
   "menu.paste",
   "menu.selectAll",
+  "menu.undo",
+  "menu.redo",
   "menu.find",
   "menu.view",
   "menu.toggleTheme",

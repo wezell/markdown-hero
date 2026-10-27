@@ -100,7 +100,7 @@ export function newDocument(): void {
 }
 
 /**
- * First-save flow for a `new://` document: prompt for a location, write the
+ * First-save flow for a new or pasted document: prompt for a location, write the
  * content, then re-point the tab at the chosen real path (watch + recents +
  * title). Returns the chosen absolute path, or null if the user cancelled the
  * dialog (caller should leave the tab dirty and in the editor).
@@ -204,6 +204,7 @@ export function unwatchFile(path: string): void {
 }
 
 export function getBaseDir(path: string): string {
+  if (!isWatchablePath(path)) return "";
   const normalized = path.replace(/\\/g, "/");
   const idx = normalized.lastIndexOf("/");
   return idx >= 0 ? normalized.slice(0, idx) : ".";

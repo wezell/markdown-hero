@@ -9,7 +9,17 @@
   import { cycleIndex } from "$lib/utils/text-search";
   import { t } from "$lib/i18n";
 
-  let { visible = $bindable(false) }: { visible: boolean } = $props();
+  let {
+    visible = $bindable(false),
+    editing = false,
+    onReplace,
+  }: {
+    visible: boolean;
+    editing?: boolean;
+    onReplace: (replacement: string, all: boolean) => void;
+  } = $props();
+
+  let replacement = $state("");
 
   let inputEl: HTMLInputElement | undefined = $state();
   let markInstance: Mark | null = null;
@@ -22,7 +32,7 @@
    * the Editor component renders its own highlight backdrop instead.
    */
   function getViewTarget(): HTMLElement | null {
-    return document.querySelector<HTMLElement>("article.prose, pre.raw-source");
+    return editing ? null : document.querySelector<HTMLElement>("article.prose, pre.raw-source");
   }
 
   function clearMarks() {
@@ -89,13 +99,19 @@
     resetSearch();
   }
 
+  function handleReplace(all: boolean) {
+    if (editing && $searchQuery && $searchTotal > 0) onReplace(replacement, all);
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.stopPropagation();
       close();
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
       e.preventDefault();
-      if (e.shiftKey) {
+      if (e.target !== inputEl) {
+        handleReplace(false);
+      } else if (e.shiftKey) {
         prevMatch();
       } else {
         nextMatch();
@@ -136,38 +152,58 @@
 {#if visible}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="search-bar" onkeydown={handleKeydown}>
-    <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-      <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
-    </svg>
+    <div class="search-row">
+      <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="6" cy="6" r="4.5" /><line x1="9.5" y1="9.5" x2="13" y2="13" />
+      </svg>
 
-    <input
-      bind:this={inputEl}
-      bind:value={$searchQuery}
-      type="text"
-      placeholder={$t('search.placeholder')}
-      class="search-input"
-    />
+      <input
+        bind:this={inputEl}
+        bind:value={$searchQuery}
+        type="text"
+        placeholder={$t('search.placeholder')}
+        aria-label={$t('search.placeholder')}
+        class="search-input"
+      />
 
-    <span class="search-count">
-      {#if $searchTotal > 0}
-        {$searchActiveIndex + 1}/{$searchTotal}
-      {:else if $searchQuery.trim()}
-        0
-      {/if}
-    </span>
+      <span class="search-count">
+        {#if $searchTotal > 0}
+          {$searchActiveIndex + 1}/{$searchTotal}
+        {:else if $searchQuery.trim()}
+          0
+        {/if}
+      </span>
 
-    <div class="search-nav">
-      <button onclick={prevMatch} disabled={$searchTotal === 0} class="search-nav-btn" title={$t('search.prevTitle')}>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="2,8 6,4 10,8"/></svg>
-      </button>
-      <button onclick={nextMatch} disabled={$searchTotal === 0} class="search-nav-btn" title={$t('search.nextTitle')}>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="2,4 6,8 10,4"/></svg>
+      <div class="search-nav">
+        <button onclick={prevMatch} disabled={$searchTotal === 0} class="search-nav-btn" title={$t('search.prevTitle')}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="2,8 6,4 10,8"/></svg>
+        </button>
+        <button onclick={nextMatch} disabled={$searchTotal === 0} class="search-nav-btn" title={$t('search.nextTitle')}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="2,4 6,8 10,4"/></svg>
+        </button>
+      </div>
+
+      <button onclick={close} class="search-close" title={$t('search.closeTitle')}>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
       </button>
     </div>
 
-    <button onclick={close} class="search-close" title={$t('search.closeTitle')}>
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
-    </button>
+    <div class="search-row" title={!editing ? $t('search.replaceEditingOnly') : undefined}>
+      <input
+        bind:value={replacement}
+        type="text"
+        placeholder={$t('search.replacePlaceholder')}
+        aria-label={$t('search.replacePlaceholder')}
+        class="search-input"
+        disabled={!editing}
+      />
+      <button onclick={() => handleReplace(false)} disabled={!editing || $searchTotal === 0} class="search-nav-btn replace-btn">
+        {$t('search.replace')}
+      </button>
+      <button onclick={() => handleReplace(true)} disabled={!editing || $searchTotal === 0} class="search-nav-btn replace-btn">
+        {$t('search.replaceAll')}
+      </button>
+    </div>
   </div>
 {/if}
 
@@ -178,8 +214,11 @@
     right: 12px;
     z-index: 40;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 6px;
+    width: 380px;
+    max-width: calc(100vw - 24px);
+    box-sizing: border-box;
     background: white;
     border: 1px solid #e5e5ea;
     border-radius: 8px;
@@ -193,13 +232,28 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
   }
 
+  .search-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .search-nav-btn.replace-btn {
+    width: auto;
+    padding: 0 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
   .search-icon {
     color: #aeaeb2;
     flex-shrink: 0;
   }
 
   .search-input {
-    width: 200px;
+    flex: 1;
+    min-width: 0;
+    width: 0;
     padding: 2px 0;
     font-size: 13px;
     background: transparent;

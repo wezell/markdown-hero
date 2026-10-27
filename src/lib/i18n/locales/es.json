@@ -184,6 +184,10 @@
   },
   "search": {
     "placeholder": "Buscar en el documento…",
+    "replacePlaceholder": "Reemplazar por…",
+    "replace": "Reemplazar",
+    "replaceAll": "Reemplazar todo",
+    "replaceEditingOnly": "Cambia al modo Edición o Dividida para reemplazar texto.",
     "prevTitle": "Anterior (Shift+Intro)",
     "nextTitle": "Siguiente (Intro)",
     "closeTitle": "Cerrar (Esc)"
@@ -323,6 +327,8 @@
     "copy": "Copiar",
     "paste": "Pegar",
     "selectAll": "Seleccionar todo",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
     "fullscreen": "Pantalla completa",
     "minimize": "Minimizar",
     "maximize": "Maximizar"

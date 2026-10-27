@@ -61,6 +61,7 @@
 
   let rendererReady = $state(false);
   let searchVisible = $state(false);
+  let editor: { replace: (replacement: string, all: boolean) => void } | undefined = $state();
   let pasteVisible = $state(false);
   let pasteDefaultMode = $state<"paste" | "url">("paste");
   let openVisible = $state(false);
@@ -183,7 +184,6 @@
   let activeTab = $derived<Tab | null>($tabs.find((t) => t.id === $activeTabId) ?? null);
   let canEditActive = $derived(
     !!activeTab?.filePath
-    && !activeTab.filePath.startsWith("paste://")
     && !activeTab.filePath.startsWith("url://")
   );
   let currentMode = $derived<ViewMode>(
@@ -343,9 +343,8 @@
     try {
       let targetPath = tab.filePath;
       let targetName = tab.fileName;
-      // An unsaved `new://` document has no location yet — prompt for one on
-      // this first save, which rebinds the tab to the chosen real path (#63).
-      if (tab.filePath.startsWith("new://")) {
+      // New and pasted documents need a location on their first save.
+      if (tab.filePath.startsWith("new://") || tab.filePath.startsWith("paste://")) {
         const saved = await saveAsNewDocument(tab.id, tab.editContent);
         if (!saved) return false; // cancelled — keep editing, stays dirty
         targetPath = saved;
@@ -615,6 +614,21 @@
     (window as any).__mdhero_find = () => {
       searchVisible = !searchVisible;
     };
+    // Undo/redo menu accelerators. The editor has its own history; any other
+    // focused text field keeps the webview's native undo stack.
+    const menuUndo = (redo: boolean) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (el?.matches?.("textarea[data-mdhero-editor]")) {
+        window.dispatchEvent(new Event(redo ? "mdhero:redo" : "mdhero:undo"));
+      } else if (
+        el &&
+        (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
+      ) {
+        document.execCommand(redo ? "redo" : "undo");
+      }
+    };
+    (window as any).__mdhero_undo = () => menuUndo(false);
+    (window as any).__mdhero_redo = () => menuUndo(true);
     // File > Close Tab (Cmd/Ctrl+W). The menu item declared this accelerator
     // but lib.rs had no branch for its id, so the event was dropped — and
     // because the native menu consumes the key, the keydown fallback never ran
@@ -1212,7 +1226,11 @@
   {#if !zenMode && !activeTab?.isEditing}
     <TableOfContents />
   {/if}
-  <SearchOverlay bind:visible={searchVisible} />
+  <SearchOverlay
+    bind:visible={searchVisible}
+    editing={activeTab?.isEditing ?? false}
+    onReplace={(replacement, all) => editor?.replace(replacement, all)}
+  />
   <PasteModal bind:visible={pasteVisible} defaultMode={pasteDefaultMode} />
   <OpenDialog bind:visible={openVisible} />
   <SettingsDialog bind:visible={settingsVisible} />
@@ -1257,6 +1275,7 @@
            saving into the new tab) the previous tab's text. -->
       {#key activeTab.id}
         <Editor
+          bind:this={editor}
           value={activeTab.editContent}
           onChange={(v) => tabStore.updateEditContent(activeTab!.id, v)}
           fontSize={$settings.fontSize}
@@ -1278,6 +1297,7 @@
       <!-- One Editor per tab, as in Split above (#129). -->
       {#key activeTab.id}
         <Editor
+          bind:this={editor}
           value={activeTab.editContent}
           onChange={(v) => tabStore.updateEditContent(activeTab!.id, v)}
           fontSize={$settings.fontSize}

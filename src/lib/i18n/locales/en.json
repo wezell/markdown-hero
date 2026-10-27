@@ -184,6 +184,10 @@
   },
   "search": {
     "placeholder": "Find in document...",
+    "replacePlaceholder": "Replace with…",
+    "replace": "Replace",
+    "replaceAll": "Replace All",
+    "replaceEditingOnly": "Switch to Edit or Split mode to replace text.",
     "prevTitle": "Previous (Shift+Enter)",
     "nextTitle": "Next (Enter)",
     "closeTitle": "Close (Esc)"
@@ -323,6 +327,8 @@
     "copy": "Copy",
     "paste": "Paste",
     "selectAll": "Select All",
+    "undo": "Undo",
+    "redo": "Redo",
     "fullscreen": "Enter Full Screen",
     "minimize": "Minimize",
     "maximize": "Maximize"

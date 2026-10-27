@@ -184,6 +184,10 @@
   },
   "search": {
     "placeholder": "Im Dokument suchen…",
+    "replacePlaceholder": "Ersetzen durch…",
+    "replace": "Ersetzen",
+    "replaceAll": "Alle ersetzen",
+    "replaceEditingOnly": "Zum Ersetzen in den Bearbeiten- oder Teilen-Modus wechseln.",
     "prevTitle": "Vorheriges (Shift+Enter)",
     "nextTitle": "Nächstes (Enter)",
     "closeTitle": "Schließen (Esc)"
@@ -323,6 +327,8 @@
     "copy": "Kopieren",
     "paste": "Einfügen",
     "selectAll": "Alles auswählen",
+    "undo": "Widerrufen",
+    "redo": "Wiederholen",
     "fullscreen": "Vollbild",
     "minimize": "Minimieren",
     "maximize": "Maximieren"
